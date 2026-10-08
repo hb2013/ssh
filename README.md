@@ -129,7 +129,7 @@ ssh-copy-id user@远程主机
 | `setup.sh` | 一键安装向导（自动模式专用） |
 | `clip-watch.sh` | 监听器：剪贴板出现新图片就同步（自启托管 / 也可前台手动跑） |
 | `clip-forward.sh` | 手动同步当前剪贴板里的那一张图 |
-| `config` | 地址配置：`REMOTE_HOSTS=("user@host1" "user@host2")`，多台数组（**不入库**，由 setup.sh 生成或复制 `config.example`） |
+| `config` | 地址与密钥：`REMOTE_HOSTS=(...)` 多台数组 + `REMOTE_KEYS=(...)` 一一对应（**不入库**，由 setup.sh 自动探测生成） |
 | `clip-watch.log` | 运行日志（自动生成） |
 | `uninstall.sh` | 停止并移除开机自启（不删项目文件） |
 
@@ -171,6 +171,12 @@ launchctl load   ~/Library/LaunchAgents/com.local.clip-watch.plist  # 恢复自�
 直接写进配置文件 `config`：`REMOTE_HOSTS=("user@host1" "user@host2")`；
 `./setup.sh` 时用空格分隔输入也会自动写成这样；临时指定则
 `./clip-forward.sh user@host1 user@host2`。每台独立同步、独立重试，一台关机不影响其他台。
+
+**每台远程用的密钥/帐号不一样怎么办？**
+不需要手工配置任何东西。`./setup.sh` 验证免密时，默认密钥连不上会**自动探测**
+`~/.ssh/` 下的所有密钥（如 `id_rsa_server` 等非默认名），找到能用的那把，
+并把「哪台用哪把密钥」写进 `config` 的 `REMOTE_KEYS`（与 `REMOTE_HOSTS`
+一一对应）。所以在任何新 Mac 上：`git pull` → `./setup.sh` 即可直接用。
 
 **换到另一台 Mac 用？**
 把整个文件夹拷过去（AirDrop / U盘 / scp），跑一次 `./setup.sh` 即可，

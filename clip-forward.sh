@@ -14,18 +14,27 @@ export LC_ALL=en_US.UTF-8
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REMOTE_HOSTS=()
+REMOTE_KEYS=()
 REMOTE_HOST=""
 # shellcheck disable=SC1091
 if [ -f "$DIR/config" ]; then . "$DIR/config"; fi
 
 # 地址优先级: 命令行参数 > config 的 REMOTE_HOSTS > config 的 REMOTE_HOST(旧写法)
+# KEYS 与 HOSTS 一一对应（来自 config 的 REMOTE_KEYS），空串 = 用默认密钥
 HOSTS=()
+KEYS=()
 if [[ $# -ge 1 ]]; then
-  for a in "$@"; do HOSTS+=("$a"); done
+  for a in "$@"; do HOSTS+=("$a"); KEYS+=(""); done
 elif [[ ${#REMOTE_HOSTS[@]} -gt 0 ]]; then
-  for a in "${REMOTE_HOSTS[@]}"; do HOSTS+=("$a"); done
+  for i in "${!REMOTE_HOSTS[@]}"; do
+    HOSTS+=("${REMOTE_HOSTS[$i]}")
+    k=""
+    if [[ $i -lt ${#REMOTE_KEYS[@]} ]]; then k="${REMOTE_KEYS[$i]}"; fi
+    KEYS+=("$k")
+  done
 elif [[ -n "$REMOTE_HOST" ]]; then
   HOSTS+=("$REMOTE_HOST")
+  KEYS+=("")
 fi
 if [[ ${#HOSTS[@]} -eq 0 ]]; then
   echo "❗ 还没有配置远程地址。请先运行: $DIR/setup.sh （或直接运行: $0 user@远程主机）"
@@ -83,8 +92,11 @@ fi
 
 # 2) 逐台推送
 OK=0; FAIL=0
-for H in "${HOSTS[@]}"; do
-  if cat "$LOCAL_TMP" | ssh -o BatchMode=yes -o ConnectTimeout=5 "$H" "cat > '$REMOTE_TMP' && osascript -e \"set the clipboard to (read (POSIX file \\\"$REMOTE_TMP\\\") as «class PNGf»)\"" 2>/dev/null; then
+for HI in "${!HOSTS[@]}"; do
+  H="${HOSTS[$HI]}"
+  SARGS=(-o BatchMode=yes -o ConnectTimeout=5)
+  if [[ -n "${KEYS[$HI]}" ]]; then SARGS+=(-i "${KEYS[$HI]}" -o IdentitiesOnly=yes); fi
+  if cat "$LOCAL_TMP" | ssh "${SARGS[@]}" "$H" "cat > '$REMOTE_TMP' && osascript -e \"set the clipboard to (read (POSIX file \\\"$REMOTE_TMP\\\") as «class PNGf»)\"" 2>/dev/null; then
     echo "✅ 已同步到 ${H}"
     OK=$((OK+1))
   else

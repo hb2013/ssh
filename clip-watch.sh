@@ -18,18 +18,27 @@ export LC_ALL=en_US.UTF-8
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REMOTE_HOSTS=()
+REMOTE_KEYS=()
 REMOTE_HOST=""
 # shellcheck disable=SC1091
 if [ -f "$DIR/config" ]; then . "$DIR/config"; fi
 
 # 地址优先级: 命令行参数 > config 的 REMOTE_HOSTS > config 的 REMOTE_HOST(旧写法)
+# KEYS 与 HOSTS 一一对应（来自 config 的 REMOTE_KEYS），空串 = 用默认密钥
 HOSTS=()
+KEYS=()
 if [[ $# -ge 1 ]]; then
-  for a in "$@"; do HOSTS+=("$a"); done
+  for a in "$@"; do HOSTS+=("$a"); KEYS+=(""); done
 elif [[ ${#REMOTE_HOSTS[@]} -gt 0 ]]; then
-  for a in "${REMOTE_HOSTS[@]}"; do HOSTS+=("$a"); done
+  for i in "${!REMOTE_HOSTS[@]}"; do
+    HOSTS+=("${REMOTE_HOSTS[$i]}")
+    k=""
+    if [[ $i -lt ${#REMOTE_KEYS[@]} ]]; then k="${REMOTE_KEYS[$i]}"; fi
+    KEYS+=("$k")
+  done
 elif [[ -n "$REMOTE_HOST" ]]; then
   HOSTS+=("$REMOTE_HOST")
+  KEYS+=("")
 fi
 if [[ ${#HOSTS[@]} -eq 0 ]]; then
   echo "❗ 还没有配置远程地址。请先运行: $DIR/setup.sh （或运行: $0 user@远程主机）"
@@ -100,7 +109,9 @@ while true; do
       if extract_png "$TMP"; then
         HASH="$(md5 -q "$TMP")"
         NOW="$(date +%s)"
-        for H in "${HOSTS[@]}"; do
+        for HI in "${!HOSTS[@]}"; do
+          H="${HOSTS[$HI]}"
+          KEY_I="${KEYS[$HI]}"
           K="$(host_key "$H")"
           eval "LH=\${LAST_HASH_${K}:-}"
           eval "FH=\${FAILED_HASH_${K}:-}"
@@ -113,7 +124,9 @@ while true; do
             SKIP=1
           fi
           if [[ "$SKIP" -eq 0 ]]; then
-            if cat "$TMP" | ssh "${SSH_OPTS[@]}" "$H" "cat > '$REMOTE_TMP' && osascript -e \"set the clipboard to (read (POSIX file \\\"$REMOTE_TMP\\\") as «class PNGf»)\"" >/dev/null 2>&1; then
+            SARGS=("${SSH_OPTS[@]}")
+            if [[ -n "$KEY_I" ]]; then SARGS+=(-i "$KEY_I" -o IdentitiesOnly=yes); fi
+            if cat "$TMP" | ssh "${SARGS[@]}" "$H" "cat > '$REMOTE_TMP' && osascript -e \"set the clipboard to (read (POSIX file \\\"$REMOTE_TMP\\\") as «class PNGf»)\"" >/dev/null 2>&1; then
               eval "LAST_HASH_${K}=\$HASH; FAILED_HASH_${K}=''"
               echo "$(date '+%H:%M:%S') ✅ 已同步到 ${H}（codex 里可 Ctrl+V）"
             else
