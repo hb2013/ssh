@@ -43,11 +43,21 @@ ssh-copy-id "$HOST_IN" 2>/dev/null || echo "   （ssh-copy-id 未成功，可能
 
 # ── ④ 验证免密登录 ────────────────────────────
 echo "④ 验证免密登录..."
-if ! ssh "${SSHOPTS[@]}" "$HOST_IN" true 2>/dev/null; then
-  echo "❌ 免密登录失败。请手动执行: ssh-copy-id $HOST_IN 然后重跑 ./setup.sh"
+if OUT="$(ssh "${SSHOPTS[@]}" "$HOST_IN" true 2>&1)"; then
+  echo "   ✅ 免密登录 OK"
+else
+  echo "❌ 免密登录失败，错误详情:"
+  echo "$OUT" | sed 's/^/     /'
+  echo ""
+  echo "   常见原因: ① 使用了非默认名的密钥(如 id_rsa_server)，且 ~/.ssh/config"
+  echo "   里没有为该主机指定 IdentityFile —— 在 ~/.ssh/config 中添加以下内容后重跑:"
+  echo "       Host ${HOST_IN#*@}"
+  echo "           User ${HOST_IN%%@*}"
+  echo "           IdentityFile ~/.ssh/你的密钥文件"
+  echo "   ② 远程走的是 Tailscale SSH(而非系统远程登录)，不支持密钥免密"
+  echo "   ③ 先手动验证: ssh $HOST_IN （不输密码能登录就没问题）"
   exit 1
 fi
-echo "   ✅ 免密登录 OK"
 
 # ── ⑤ 端到端链路测试（真实传一张小图并读回）───
 echo "⑤ 端到端链路测试（会在远程剪贴板放一张测试小图）..."
