@@ -1,23 +1,33 @@
 #!/bin/bash
-# 手动版：把本机剪贴板里的图片一键同步到远程 Mac 的剪贴板
-# 用法: ./clip-forward.sh [user@host]    （不带参数则使用 config 里配置的地址）
+# 手动版：把本机剪贴板里的图片一键同步到远程 Mac 的剪贴板（支持多台）
+# 用法: ./clip-forward.sh [user@host ...]    （不带参数则使用 config 里配置的地址）
 # 同步完成后，在远程 codex 里按 Ctrl+V 即可粘贴图片（和本机操作一样）
 #
 # 支持的图片来源:
 #   ① 截图 Cmd+Ctrl+Shift+4（PNG 数据）
 #   ② 浏览器等 App 里右键「拷贝图像」（TIFF 数据，自动转 PNG）
-#   ③ Finder 里右键「拷贝」图片文件（文件引用，自动转 PNG；多选只取第一张）
+#   ③ Finder 里右键「拷贝」图片文件（仅图片格式，自动转 PNG；多选只取第一张）
 set -euo pipefail
 
 # 强制合法的 UTF-8 locale（macOS 自带 bash 3.2 解析中文会出错）
 export LC_ALL=en_US.UTF-8
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REMOTE_HOSTS=()
+REMOTE_HOST=""
 # shellcheck disable=SC1091
 if [ -f "$DIR/config" ]; then . "$DIR/config"; fi
 
-HOST="${1:-${REMOTE_HOST:-}}"
-if [[ -z "$HOST" ]]; then
+# 地址优先级: 命令行参数 > config 的 REMOTE_HOSTS > config 的 REMOTE_HOST(旧写法)
+HOSTS=()
+if [[ $# -ge 1 ]]; then
+  for a in "$@"; do HOSTS+=("$a"); done
+elif [[ ${#REMOTE_HOSTS[@]} -gt 0 ]]; then
+  for a in "${REMOTE_HOSTS[@]}"; do HOSTS+=("$a"); done
+elif [[ -n "$REMOTE_HOST" ]]; then
+  HOSTS+=("$REMOTE_HOST")
+fi
+if [[ ${#HOSTS[@]} -eq 0 ]]; then
   echo "❗ 还没有配置远程地址。请先运行: $DIR/setup.sh （或直接运行: $0 user@远程主机）"
   exit 1
 fi
@@ -65,18 +75,24 @@ extract_png() {
 LOCAL_TMP="$(mktemp -t clipfwd).png"
 REMOTE_TMP="/tmp/clip-forwarded.png"
 
-# 1) 本机剪贴板 -> PNG 文件
+# 1) 本机剪贴板 -> PNG 文件（只提取一次，推送给所有目标）
 if ! extract_png "$LOCAL_TMP"; then
   echo "❌ 本机剪贴板里没有图片。支持: 截图(Cmd+Ctrl+Shift+4) / App内右键拷贝图像 / Finder拷贝图片文件"
   exit 1
 fi
 
-# 2) 一条 SSH 通道完成：传输文件 + 设置远程 Mac 剪贴板
-if cat "$LOCAL_TMP" | ssh -o BatchMode=yes -o ConnectTimeout=5 "$HOST" "cat > '$REMOTE_TMP' && osascript -e \"set the clipboard to (read (POSIX file \\\"$REMOTE_TMP\\\") as «class PNGf»)\"" 2>/dev/null; then
-  rm -f "$LOCAL_TMP"
-  echo "✅ 已同步到 ${HOST} 的剪贴板，去 codex 里按 Ctrl+V 粘贴吧"
-else
-  rm -f "$LOCAL_TMP"
-  echo "❌ 同步失败，请检查: ① 远程 Mac 是否在线 ② 能否 ssh $HOST 免密登录"
-  exit 1
-fi
+# 2) 逐台推送
+OK=0; FAIL=0
+for H in "${HOSTS[@]}"; do
+  if cat "$LOCAL_TMP" | ssh -o BatchMode=yes -o ConnectTimeout=5 "$H" "cat > '$REMOTE_TMP' && osascript -e \"set the clipboard to (read (POSIX file \\\"$REMOTE_TMP\\\") as «class PNGf»)\"" 2>/dev/null; then
+    echo "✅ 已同步到 ${H}"
+    OK=$((OK+1))
+  else
+    echo "❌ 同步失败: ${H}（不在线或免密未配置）"
+    FAIL=$((FAIL+1))
+  fi
+done
+rm -f "$LOCAL_TMP"
+
+echo "完成: 成功 ${OK} 台，失败 ${FAIL} 台（共 ${#HOSTS[@]} 台）"
+[[ "$FAIL" -eq 0 ]] || exit 1

@@ -86,7 +86,7 @@ ssh-copy-id user@远程主机
 
 ```bash
 # 1. Cmd+Ctrl+Shift+4 截图（图进剪贴板）
-./clip-forward.sh user@远程主机    # 2. 同步这一张
+./clip-forward.sh user@远程主机    # 2. 同步这一张（多台: ./clip-forward.sh user@主机1 user@主机2）
 # 3. 到远程 codex 里 Ctrl+V
 ```
 
@@ -129,7 +129,7 @@ ssh-copy-id user@远程主机
 | `setup.sh` | 一键安装向导（自动模式专用） |
 | `clip-watch.sh` | 监听器：剪贴板出现新图片就同步（自启托管 / 也可前台手动跑） |
 | `clip-forward.sh` | 手动同步当前剪贴板里的那一张图 |
-| `config` | 地址配置：`REMOTE_HOST="user@host"`（**不入库**，由 setup.sh 生成或复制 `config.example`） |
+| `config` | 地址配置：`REMOTE_HOSTS=("user@host1" "user@host2")`，多台数组（**不入库**，由 setup.sh 生成或复制 `config.example`） |
 | `clip-watch.log` | 运行日志（自动生成） |
 | `uninstall.sh` | 停止并移除开机自启（不删项目文件） |
 
@@ -166,6 +166,11 @@ launchctl load   ~/Library/LaunchAgents/com.local.clip-watch.plist  # 恢复自�
 项目放在了「桌面 / 文稿 / 下载」等受 macOS 保护的位置，后台 launchd
 任务无权访问这些文件夹。把整个文件夹挪到普通目录（如 `~/clip-sync`），
 重跑 `./setup.sh` 即可。
+
+**想同时同步到多台远程 Mac？**
+直接写进配置文件 `config`：`REMOTE_HOSTS=("user@host1" "user@host2")`；
+`./setup.sh` 时用空格分隔输入也会自动写成这样；临时指定则
+`./clip-forward.sh user@host1 user@host2`。每台独立同步、独立重试，一台关机不影响其他台。
 
 **换到另一台 Mac 用？**
 把整个文件夹拷过去（AirDrop / U盘 / scp），跑一次 `./setup.sh` 即可，
