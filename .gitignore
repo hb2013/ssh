@@ -1,0 +1,6 @@
+# 个人配置（含内网地址，不入库；首次使用跑 setup.sh 自动生成，或复制 config.example）
+config
+# 运行日志
+clip-watch.log
+# macOS
+.DS_Store
